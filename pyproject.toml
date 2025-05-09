@@ -1,0 +1,19 @@
+[project]
+name = "llmtools"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "itsaquestion",email = "itsaquestion@gmail.com"},
+]
+dependencies = ["requests>=2.32.3", "tqdm>=4.67.1", "ipykernel>=6.29.5", "python-dotenv>=1.1.0"]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true
