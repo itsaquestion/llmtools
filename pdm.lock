@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:e863357c3585f51220acef97fbbc4de7da553bf3330e58460d2a60309206af95"
+content_hash = "sha256:11d56dfdb978158f0fc1f105ed50535f109e6b621b1ccc14694a3cc776f1944a"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -484,6 +484,15 @@ files = [
 ]
 
 [[package]]
+name = "pysocks"
+version = "1.7.1"
+summary = ""
+files = [
+    {file = "PySocks-1.7.1-py3-none-any.whl", hash = "sha256:2725bd0a9925919b9b51739eea5f9e2bae91e83288108a9ad338b2e3a4435ee5"},
+    {file = "PySocks-1.7.1.tar.gz", hash = "sha256:3f8804571ebe159c380ac6de37643bb4685970655d3bba243530d6558b799aa0"},
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 summary = ""
@@ -605,6 +614,20 @@ dependencies = [
     "charset-normalizer",
     "idna",
     "urllib3",
+]
+files = [
+    {file = "requests-2.32.3-py3-none-any.whl", hash = "sha256:70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6"},
+    {file = "requests-2.32.3.tar.gz", hash = "sha256:55365417734eb18255590a9ff9eb97e9e1da868d4ccd6402399eaf68af20a760"},
+]
+
+[[package]]
+name = "requests"
+version = "2.32.3"
+extras = ["socks"]
+summary = ""
+dependencies = [
+    "pysocks",
+    "requests==2.32.3",
 ]
 files = [
     {file = "requests-2.32.3-py3-none-any.whl", hash = "sha256:70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6"},

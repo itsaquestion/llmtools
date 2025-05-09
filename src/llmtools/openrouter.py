@@ -46,6 +46,7 @@ def chat(
     max_tokens: Optional[int] = None,
     callbacks: List[Callable] = [],
     provider=None,
+    proxy=None,
 ) -> str:
     """
     Send a streaming chat message to OpenRouter API with callbacks for token handling.
@@ -56,6 +57,7 @@ def chat(
         temperature: Controls randomness (0-2, default 1.0)
         max_tokens: Maximum tokens in response (optional)
         callbacks: List of callback functions to handle streaming tokens
+        proxy: Proxy configuration for the request (default: None)
 
     Returns:
         str: The complete response text
@@ -91,6 +93,10 @@ def chat(
     if max_tokens is not None:
         payload["max_tokens"] = max_tokens
 
+    proxies = None
+    if proxy:
+        proxies = {"http": proxy, "https": proxy}
+
     try:
         full_response = ""
         with requests.post(
@@ -99,6 +105,7 @@ def chat(
             json=payload,
             timeout=30,
             stream=True,
+            proxies=proxies,
         ) as response:
             response.raise_for_status()
 
@@ -153,6 +160,7 @@ if __name__ == "__main__":
             max_tokens=512,
             callbacks=[screen_callback],
             provider={"order": ["OpenAI", "Together"]},
+            proxy="http://127.0.0.1:7897",
         )
 
         # print(f"\n\nFull response saved to {filename}")
