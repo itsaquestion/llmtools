@@ -45,8 +45,8 @@ def chat(
     temperature: float = 1.0,
     max_tokens: Optional[int] = None,
     callbacks: List[Callable] = [],
-    provider=None,
-    proxy=None,
+    provider: Optional[dict] = None,
+    proxy: Optional[str] = None,
 ) -> str:
     """
     Send a streaming chat message to OpenRouter API with callbacks for token handling.
@@ -57,7 +57,8 @@ def chat(
         temperature: Controls randomness (0-2, default 1.0)
         max_tokens: Maximum tokens in response (optional)
         callbacks: List of callback functions to handle streaming tokens
-        proxy: Proxy configuration for the request (default: None)
+        provider: Dictionary containing provider specific settings (optional)
+        proxy: Proxy URL to use for the request (optional)
 
     Returns:
         str: The complete response text
