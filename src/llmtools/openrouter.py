@@ -58,7 +58,7 @@ def chat(
         max_tokens: Maximum tokens in response (optional)
         callbacks: List of callback functions to handle streaming tokens
         provider: Dictionary containing provider specific settings (optional)
-        proxy: Proxy URL to use for the request (optional)
+        proxy: Proxy URL to use for the request. If not provided, will check environment variable LLMTOOLS_PROXY (optional)
 
     Returns:
         str: The complete response text
@@ -94,9 +94,12 @@ def chat(
     if max_tokens is not None:
         payload["max_tokens"] = max_tokens
 
+    # Handle proxy configuration -优先使用参数，然后是环境变量
     proxies = None
-    if proxy:
+    if proxy is not None:
         proxies = {"http": proxy, "https": proxy}
+    elif os.getenv("LLMTOOLS_PROXY"):
+        proxies = {"http": os.environ["LLMTOOLS_PROXY"], "https": os.environ["LLMTOOLS_PROXY"]}
 
     try:
         full_response = ""
@@ -156,12 +159,11 @@ if __name__ == "__main__":
         # Run chat with both callbacks
         response = chat(
             "Say 'OK' and say 'OK' only./no_think",
-            model="openai/gpt-4o-mini",
+            model="openai/gpt-4.1-nano",
             temperature=1,
             max_tokens=512,
             callbacks=[screen_callback],
-            provider={"order": ["OpenAI", "Together"]},
-            proxy="http://127.0.0.1:7897",
+            provider={"order": ["OpenAI", "Together"]}
         )
 
         # print(f"\n\nFull response saved to {filename}")
