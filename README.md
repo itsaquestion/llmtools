@@ -65,7 +65,7 @@ with ParallelLLMProcessor(
 ### Using Default Database Filename
 
 ```python
-# Automatically generates filename like "llm_results_1642694400.db"
+# Automatically generates filename like "llm_results_20240115_143022.db"
 processor = ParallelLLMProcessor(
     chat_fn=my_llm_function,
     save_to_db=True  # Uses timestamp-based filename

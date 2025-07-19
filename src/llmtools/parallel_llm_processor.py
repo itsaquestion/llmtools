@@ -55,7 +55,7 @@ class ParallelLLMProcessor:
         Using default database filename:
         >>> processor = ParallelLLMProcessor(
         ...     chat_fn=my_llm_function,
-        ...     save_to_db=True  # Uses llm_results_{timestamp}.db
+        ...     save_to_db=True  # Uses llm_results_{YYYYMMDD_HHMMSS}.db
         ... )
     """
     
@@ -81,7 +81,7 @@ class ParallelLLMProcessor:
                        When True, enables real-time database storage of all processing data.
             db_filename: Database filename for SQLite storage (optional).
                         If None and save_to_db=True, generates default filename with timestamp.
-                        Format: "llm_results_{unix_timestamp}.db"
+                        Format: "llm_results_{YYYYMMDD_HHMMSS}.db"
         
         Raises:
             TypeError: If chat_fn is not callable or parameter types are incorrect
@@ -155,12 +155,13 @@ class ParallelLLMProcessor:
 
     def _generate_default_filename(self) -> str:
         """
-        Generate a default database filename with timestamp.
+        Generate a default database filename with human-readable timestamp.
         
         Returns:
-            str: Default filename in format "llm_results_{timestamp}.db"
+            str: Default filename in format "llm_results_{YYYYMMDD_HHMMSS}.db"
         """
-        timestamp = int(time.time())
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"llm_results_{timestamp}.db"
         logger.info(f"Generated default database filename: {filename}")
         return filename

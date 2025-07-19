@@ -90,7 +90,7 @@ def example_2_default_filename():
     processor = ParallelLLMProcessor(
         chat_fn=demo_llm_function,
         num_workers=2,
-        save_to_db=True  # Uses default filename: llm_results_{timestamp}.db
+        save_to_db=True  # Uses default filename: llm_results_{YYYYMMDD_HHMMSS}.db
     )
     
     print("Using default database filename (timestamp-based)...")

@@ -104,19 +104,27 @@ class TestParallelLLMProcessorDatabaseParams(unittest.TestCase):
         # Should be different due to timestamp
         self.assertNotEqual(filename1, filename2)
         
-        # Test that filename contains valid timestamp
+        # Test that filename contains valid timestamp in YYYYMMDD_HHMMSS format
         import re
-        pattern = r'llm_results_(\d+)\.db'
+        pattern = r'llm_results_(\d{8}_\d{6})\.db'
         match1 = re.match(pattern, filename1)
         match2 = re.match(pattern, filename2)
         
         self.assertIsNotNone(match1)
         self.assertIsNotNone(match2)
         
-        # Timestamps should be valid integers
-        timestamp1 = int(match1.group(1))
-        timestamp2 = int(match2.group(1))
-        self.assertGreater(timestamp2, timestamp1)
+        # Timestamps should be different (generated at different times)
+        timestamp1 = match1.group(1)
+        timestamp2 = match2.group(1)
+        self.assertNotEqual(timestamp1, timestamp2)
+        
+        # Verify timestamp format is valid (YYYYMMDD_HHMMSS)
+        from datetime import datetime
+        try:
+            datetime.strptime(timestamp1, '%Y%m%d_%H%M%S')
+            datetime.strptime(timestamp2, '%Y%m%d_%H%M%S')
+        except ValueError:
+            self.fail("Generated timestamp format is invalid")
     
     def test_parameter_validation_chat_fn(self):
         """Test parameter validation for chat_fn."""

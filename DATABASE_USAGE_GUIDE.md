@@ -55,7 +55,7 @@ with ParallelLLMProcessor(
 # Automatically generates timestamp-based filename
 processor = ParallelLLMProcessor(
     chat_fn=your_llm_function,
-    save_to_db=True  # Creates llm_results_{timestamp}.db
+    save_to_db=True  # Creates llm_results_{YYYYMMDD_HHMMSS}.db
 )
 ```
 
