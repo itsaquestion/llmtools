@@ -5,6 +5,10 @@ from tqdm import tqdm
 import time
 import logging
 from src.llmtools.database_manager import DatabaseManager
+from src.llmtools.database_validator import DatabaseValidator
+from src.llmtools.recovery_analyzer import RecoveryAnalyzer
+from src.llmtools.recovery_processor import RecoveryProcessor
+from src.llmtools.database_updater import DatabaseUpdater
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -16,16 +20,18 @@ class OrderedResult:
 
 class ParallelLLMProcessor:
     """
-    A parallel processor for LLM inference with optional SQLite database storage.
+    A parallel processor for LLM inference with optional SQLite database storage and recovery capabilities.
     
     This class provides concurrent processing of multiple prompts while maintaining
     result order and optionally storing all prompts and results in a SQLite database
-    for persistence and analysis.
+    for persistence and analysis. It includes robust recovery functionality to resume
+    interrupted processing sessions.
     
     Key Features:
     - Concurrent processing with configurable worker threads
     - Automatic retry mechanism with exponential backoff
     - Optional real-time database storage of prompts and results
+    - Recovery from interrupted processing sessions
     - Thread-safe database operations
     - Graceful error handling and resource management
     - Context manager support for automatic cleanup
@@ -37,7 +43,16 @@ class ParallelLLMProcessor:
     - Real-time updates: Results are stored immediately upon completion
     - Thread-safe: Multiple workers can safely update the database concurrently
     
-    Example:
+    Recovery Functionality:
+    The recover_from_database method enables resuming interrupted processing:
+    - Analyzes existing database for incomplete results (NULL, empty, or "NA")
+    - Reprocesses only the failed or incomplete prompts
+    - Preserves existing successful results
+    - Maintains original result order
+    - Uses current processor configuration for recovery
+    - Idempotent operation - safe to run multiple times
+    
+    Examples:
         Basic usage without database:
         >>> processor = ParallelLLMProcessor(chat_fn=my_llm_function, num_workers=4)
         >>> results = processor.process_prompts(["Hello", "World"])
@@ -51,6 +66,19 @@ class ParallelLLMProcessor:
         ...     db_filename="my_results.db"
         ... ) as processor:
         ...     results = processor.process_prompts(["Hello", "World"])
+        
+        Recovery from interrupted session:
+        >>> processor = ParallelLLMProcessor(chat_fn=my_llm_function, num_workers=4)
+        >>> results = processor.recover_from_database("interrupted_session.db")
+        >>> processor.close()
+        
+        Recovery with improved configuration:
+        >>> with ParallelLLMProcessor(
+        ...     chat_fn=improved_llm_function,  # Better error handling
+        ...     num_workers=8,                  # More workers
+        ...     retry_attempts=5                # More retries
+        ... ) as processor:
+        ...     results = processor.recover_from_database("failed_session.db")
         
         Using default database filename:
         >>> processor = ParallelLLMProcessor(
@@ -294,6 +322,223 @@ class ParallelLLMProcessor:
                     pbar.update(1)
         
         return results
+
+    def recover_from_database(self, db_file_path: str) -> List[str]:
+        """
+        Recover from an existing database file by reprocessing incomplete results.
+        
+        This method analyzes an existing SQLite database file, identifies records with
+        incomplete results (NULL, empty string, or "NA"), reprocesses the corresponding
+        prompts using the current processor configuration, and returns a complete list
+        of results in the original order.
+        
+        Args:
+            db_file_path: Path to the SQLite database file to recover from
+            
+        Returns:
+            List[str]: Complete list of results in the same order as the original prompts
+            
+        Raises:
+            FileNotFoundError: If the database file does not exist
+            ValueError: If the database format is invalid or table structure is incorrect
+            sqlite3.Error: If database operations fail
+            RuntimeError: If critical errors occur during recovery processing
+            
+        Example:
+            >>> processor = ParallelLLMProcessor(chat_fn=my_llm_function, num_workers=4)
+            >>> results = processor.recover_from_database("previous_results.db")
+            >>> processor.close()
+        """
+        import time
+        recovery_start_time = time.time()
+        
+        # Enhanced logging: Recovery operation start
+        logger.info("=" * 60)
+        logger.info("RECOVERY OPERATION STARTED")
+        logger.info("=" * 60)
+        logger.info(f"Database file: {db_file_path}")
+        logger.info(f"Processor configuration:")
+        logger.info(f"  - Workers: {self.num_workers}")
+        logger.info(f"  - Retry attempts: {self.retry_attempts}")
+        logger.info(f"  - Retry delay: {self.retry_delay}s")
+        logger.info(f"  - Timeout: {self.timeout}s")
+        
+        try:
+            # Step 1: Validate database file and structure
+            logger.info("Step 1/7: Validating database file and structure...")
+            DatabaseValidator.validate_database_for_recovery(db_file_path)
+            logger.info("✓ Database validation completed successfully")
+            
+            # Step 2: Analyze database to identify failed records and existing results
+            logger.info("Step 2/7: Analyzing database for incomplete records...")
+            failed_records, existing_results = RecoveryAnalyzer.analyze_database(db_file_path)
+            
+            # Enhanced logging: Database analysis results
+            total_records = len(existing_results)
+            incomplete_records = len(failed_records)
+            complete_records = total_records - incomplete_records
+            completion_rate = (complete_records / total_records * 100) if total_records > 0 else 0
+            
+            logger.info("✓ Database analysis completed")
+            logger.info(f"Database analysis results:")
+            logger.info(f"  - Total records: {total_records}")
+            logger.info(f"  - Complete records: {complete_records}")
+            logger.info(f"  - Incomplete records: {incomplete_records}")
+            logger.info(f"  - Current completion rate: {completion_rate:.1f}%")
+            
+            # Step 3: Check if any recovery is needed
+            if not failed_records:
+                logger.info("Step 3/7: No recovery needed - all results are complete")
+                logger.info("=" * 60)
+                logger.info("RECOVERY OPERATION COMPLETED (NO ACTION REQUIRED)")
+                logger.info("=" * 60)
+                return existing_results
+            
+            logger.info(f"Step 3/7: Recovery needed for {incomplete_records} records")
+            
+            # Enhanced logging: Recovery details
+            if incomplete_records <= 10:
+                logger.info("Records to be recovered:")
+                for i, (record_id, prompt) in enumerate(failed_records[:10], 1):
+                    logger.info(f"  {i}. Record {record_id}: {prompt[:50]}{'...' if len(prompt) > 50 else ''}")
+            else:
+                logger.info(f"Sample of records to be recovered (showing first 5 of {incomplete_records}):")
+                for i, (record_id, prompt) in enumerate(failed_records[:5], 1):
+                    logger.info(f"  {i}. Record {record_id}: {prompt[:50]}{'...' if len(prompt) > 50 else ''}")
+                logger.info(f"  ... and {incomplete_records - 5} more records")
+            
+            # Step 4: Reprocess failed prompts
+            logger.info("Step 4/7: Starting reprocessing of failed prompts...")
+            recovery_processor = RecoveryProcessor(self)
+            
+            # Validate recovery processor configuration
+            if not recovery_processor.validate_configuration():
+                raise RuntimeError("Recovery processor configuration is invalid")
+            
+            logger.info("✓ Recovery processor configuration validated")
+            
+            # Enhanced logging: Processing start
+            processing_start_time = time.time()
+            logger.info(f"Beginning parallel reprocessing with {self.num_workers} workers...")
+            
+            new_results = recovery_processor.process_failed_prompts(failed_records)
+            
+            processing_duration = time.time() - processing_start_time
+            logger.info(f"✓ Reprocessing completed in {processing_duration:.2f} seconds")
+            
+            if not new_results:
+                logger.warning("No new results generated during reprocessing")
+                logger.warning("This may indicate a configuration or processing issue")
+                return existing_results
+            
+            # Step 5: Update database with new results
+            logger.info("Step 5/7: Updating database with new results...")
+            update_start_time = time.time()
+            
+            failed_updates = DatabaseUpdater.update_results(db_file_path, new_results)
+            
+            update_duration = time.time() - update_start_time
+            successful_updates = len(new_results) - len(failed_updates)
+            
+            logger.info(f"✓ Database update completed in {update_duration:.2f} seconds")
+            logger.info(f"Update results:")
+            logger.info(f"  - Successful updates: {successful_updates}")
+            logger.info(f"  - Failed updates: {len(failed_updates)}")
+            
+            if failed_updates:
+                logger.warning(f"Failed to update records: {failed_updates}")
+                if len(failed_updates) <= 5:
+                    for record_id in failed_updates:
+                        logger.warning(f"  - Record {record_id} update failed")
+                else:
+                    logger.warning(f"  - Records {failed_updates[:3]} and {len(failed_updates) - 3} others failed")
+            
+            # Step 6: Read final results from database to ensure consistency
+            logger.info("Step 6/7: Verifying final database state...")
+            _, final_results = RecoveryAnalyzer.analyze_database(db_file_path)
+            logger.info("✓ Final database state verified")
+            
+            # Step 7: Generate comprehensive recovery summary
+            logger.info("Step 7/7: Generating recovery summary...")
+            
+            recovery_duration = time.time() - recovery_start_time
+            successful_recoveries = len(failed_records) - len(failed_updates)
+            final_completion_rate = ((total_records - len(failed_updates)) / total_records * 100) if total_records > 0 else 0
+            
+            # Enhanced logging: Comprehensive recovery summary
+            logger.info("=" * 60)
+            logger.info("RECOVERY OPERATION SUMMARY")
+            logger.info("=" * 60)
+            logger.info(f"Operation duration: {recovery_duration:.2f} seconds")
+            logger.info(f"Processing duration: {processing_duration:.2f} seconds")
+            logger.info(f"Database update duration: {update_duration:.2f} seconds")
+            logger.info("")
+            logger.info("Recovery Results:")
+            logger.info(f"  - Records attempted: {len(failed_records)}")
+            logger.info(f"  - Records successfully recovered: {successful_recoveries}")
+            logger.info(f"  - Records still incomplete: {len(failed_updates)}")
+            logger.info(f"  - Recovery success rate: {(successful_recoveries / len(failed_records) * 100):.1f}%")
+            logger.info("")
+            logger.info("Database State:")
+            logger.info(f"  - Total records: {total_records}")
+            logger.info(f"  - Complete records: {total_records - len(failed_updates)}")
+            logger.info(f"  - Incomplete records: {len(failed_updates)}")
+            logger.info(f"  - Overall completion rate: {final_completion_rate:.1f}%")
+            logger.info(f"  - Improvement: +{final_completion_rate - completion_rate:.1f}%")
+            
+            # Log final statistics with enhanced detail
+            try:
+                stats = DatabaseUpdater.get_update_statistics(db_file_path)
+                logger.info("")
+                logger.info("Detailed Database Statistics:")
+                logger.info(f"  - NULL results: {stats['null_records']}")
+                logger.info(f"  - Empty string results: {stats['empty_records']}")
+                logger.info(f"  - 'NA' results: {stats['na_records']}")
+                logger.info(f"  - Complete results: {stats['complete_records']}")
+            except Exception as e:
+                logger.debug(f"Could not retrieve detailed statistics: {str(e)}")
+            
+            # Final status message
+            if len(failed_updates) == 0:
+                logger.info("")
+                logger.info("🎉 RECOVERY COMPLETED SUCCESSFULLY - ALL RECORDS RECOVERED")
+            elif successful_recoveries > 0:
+                logger.info("")
+                logger.info(f"⚠️  RECOVERY PARTIALLY SUCCESSFUL - {successful_recoveries}/{len(failed_records)} RECORDS RECOVERED")
+            else:
+                logger.warning("")
+                logger.warning("❌ RECOVERY FAILED - NO RECORDS WERE SUCCESSFULLY RECOVERED")
+            
+            logger.info("=" * 60)
+            
+            return final_results
+            
+        except (FileNotFoundError, ValueError, RuntimeError) as e:
+            # Enhanced error logging with context
+            recovery_duration = time.time() - recovery_start_time
+            logger.error("=" * 60)
+            logger.error("RECOVERY OPERATION FAILED")
+            logger.error("=" * 60)
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error(f"Operation duration before failure: {recovery_duration:.2f} seconds")
+            logger.error(f"Database file: {db_file_path}")
+            logger.error("=" * 60)
+            raise
+            
+        except Exception as e:
+            # Enhanced unexpected error logging
+            recovery_duration = time.time() - recovery_start_time
+            logger.error("=" * 60)
+            logger.error("RECOVERY OPERATION FAILED - UNEXPECTED ERROR")
+            logger.error("=" * 60)
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error(f"Operation duration before failure: {recovery_duration:.2f} seconds")
+            logger.error(f"Database file: {db_file_path}")
+            logger.error("This is an unexpected error. Please check the logs above for more details.")
+            logger.error("=" * 60)
+            raise RuntimeError(f"Recovery operation failed: {str(e)}")
 
     def close(self) -> None:
         """

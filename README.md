@@ -6,6 +6,7 @@ A Python library for parallel LLM inference processing with optional SQLite data
 
 - **Parallel Processing**: Concurrent execution of multiple LLM prompts while maintaining result order
 - **Database Storage**: Optional real-time SQLite database storage for prompts and results
+- **Recovery Functionality**: Resume interrupted processing sessions and recover incomplete results
 - **Thread Safety**: Safe concurrent database operations across multiple worker threads
 - **Error Resilience**: Robust error handling with configurable retry mechanisms
 - **Resource Management**: Automatic cleanup with context manager support
@@ -149,6 +150,59 @@ with ParallelLLMProcessor(
     results = processor.process_prompts(large_prompt_list)
     # Database connections automatically closed
 ```
+
+## Recovery from Interrupted Sessions
+
+The library includes powerful recovery functionality to resume interrupted processing:
+
+### Basic Recovery
+
+```python
+from src.llmtools import ParallelLLMProcessor
+
+# Recover from an interrupted session
+processor = ParallelLLMProcessor(
+    chat_fn=my_llm_function,
+    num_workers=4
+)
+
+# This will only reprocess incomplete results (NULL, empty, or "NA")
+results = processor.recover_from_database("interrupted_session.db")
+processor.close()
+
+print(f"Recovered {len(results)} results")
+```
+
+### Recovery with Improved Configuration
+
+```python
+# Use recovery with better configuration than the original session
+with ParallelLLMProcessor(
+    chat_fn=improved_llm_function,  # Better error handling
+    num_workers=8,                  # More workers
+    retry_attempts=5,               # More retries
+    timeout=120.0                   # Longer timeout
+) as processor:
+    results = processor.recover_from_database("failed_session.db")
+```
+
+### Recovery Features
+
+- **Selective Processing**: Only reprocesses incomplete results (NULL, empty string, or "NA")
+- **Data Preservation**: Existing successful results are never modified
+- **Order Maintenance**: Results are returned in the original order
+- **Idempotent Operation**: Safe to run multiple times
+- **Configuration Flexibility**: Use different settings than the original session
+- **Comprehensive Logging**: Detailed progress and error reporting
+
+### When to Use Recovery
+
+- **Interrupted Processing**: Script was stopped before completion
+- **Partial Failures**: Some prompts failed due to API issues
+- **System Issues**: Processing interrupted by crashes or network problems
+- **Configuration Updates**: Retry with improved settings or LLM function
+
+For detailed recovery documentation, see `RECOVERY_USAGE_GUIDE.md`.
 
 ## Advanced Usage
 
