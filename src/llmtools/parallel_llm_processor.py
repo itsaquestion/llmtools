@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from tqdm import tqdm
 import time
 import logging
-from src.llmtools.database_manager import DatabaseManager
-from src.llmtools.database_validator import DatabaseValidator
-from src.llmtools.recovery_analyzer import RecoveryAnalyzer
-from src.llmtools.recovery_processor import RecoveryProcessor
-from src.llmtools.database_updater import DatabaseUpdater
+from .database_manager import DatabaseManager
+from .database_validator import DatabaseValidator
+from .recovery_analyzer import RecoveryAnalyzer
+from .recovery_processor import RecoveryProcessor
+from .database_updater import DatabaseUpdater
 
 # Configure logging
 logger = logging.getLogger(__name__)

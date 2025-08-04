@@ -16,7 +16,7 @@ import time
 
 # Type checking import to avoid circular imports
 if TYPE_CHECKING:
-    from src.llmtools.parallel_llm_processor import ParallelLLMProcessor
+    from .parallel_llm_processor import ParallelLLMProcessor
 
 # Configure logging
 logger = logging.getLogger(__name__)
